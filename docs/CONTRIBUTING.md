@@ -59,8 +59,8 @@ You can test the action locally using [act](https://github.com/nektos/act). See 
 # Quick test with the provided script
 ./act-build.sh
 
-# Or run the CI workflow directly
-act -W .github/workflows/ci-cd.yml
+# Or run the test workflow directly
+act -W .github/workflows/test.yml
 ```
 
 ### Documentation

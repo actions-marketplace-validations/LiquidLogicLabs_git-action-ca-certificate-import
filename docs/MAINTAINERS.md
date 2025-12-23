@@ -117,13 +117,13 @@ curl -s https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo ba
 
 ```bash
 # Run the test workflow
-act -W .github/workflows/ci-cd.yml
+act -W .github/workflows/test.yml
 
 # Run specific job
-act -W .github/workflows/ci-cd.yml -j test
+act -W .github/workflows/test.yml -j test
 
 # List all jobs without running
-act -W .github/workflows/ci-cd.yml -l
+act -W .github/workflows/test.yml -l
 ```
 
 #### 2. Create a Simple Test Workflow
@@ -191,7 +191,7 @@ openssl req -x509 -newkey rsa:2048 -keyout test-certs/test-key.pem \
   -subj "/C=US/ST=Test/L=Test/O=Test/CN=test.local"
 
 # Run test
-act -W .github/workflows/ci-cd.yml -j test --privileged
+act -W .github/workflows/test.yml -j test --privileged
 ```
 
 ### Act Configuration
@@ -240,7 +240,7 @@ Error: Permission denied when installing certificate
 Act runs in Docker with limited permissions. Use `--privileged`:
 
 ```bash
-act -W .github/workflows/ci-cd.yml --privileged
+act -W .github/workflows/test.yml --privileged
 ```
 
 #### Issue: Action Not Found
@@ -255,7 +255,7 @@ Ensure you're in the repository root:
 
 ```bash
 cd ./ca-certificate-import-action
-act -W .github/workflows/ci-cd.yml
+act -W .github/workflows/test.yml
 ```
 
 #### Issue: Docker Image Too Small
@@ -283,7 +283,7 @@ The repository includes `act-build.sh` for convenient local testing:
 This script will:
 - ✅ Check if act is installed
 - ✅ Auto-create test certificates if needed
-- ✅ Run the full test suite from `ci-cd.yml`
+- ✅ Run the full test suite from `test.yml`
 - ✅ Provide helpful next steps
 
 ## Release Automation
@@ -430,7 +430,7 @@ author: 'LiquidLogicLabs'
 ## Complete Checklist
 
 Before publishing:
-- [ ] All tests pass (`.github/workflows/ci-cd.yml`)
+- [ ] All tests pass (`.github/workflows/test.yml`)
 - [ ] CHANGELOG.md is up to date
 - [ ] README.md is complete
 - [ ] No sensitive data in files

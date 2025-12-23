@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check version format in tag
+        id: version
+        uses: nowsprinting/check-version-format-action@v4
+        with:
+          prefix: 'v'
+
+      - name: Build validation
+        run: |
+          echo "🔨 Validating action before release..."
+          
+          # Validate action.yml
+          if [ -f "action.yml" ]; then
+            echo "✓ action.yml found"
+          else
+            echo "✗ action.yml not found"
+            exit 1
+          fi
+          
+          # Validate install script
+          if [ -f "install-certificate.sh" ]; then
+            echo "✓ install-certificate.sh found"
+            chmod +x install-certificate.sh
+            
+            # Test script syntax
+            bash -n install-certificate.sh
+            echo "✓ install-certificate.sh syntax valid"
+          else
+            echo "✗ install-certificate.sh not found"
+            exit 1
+          fi
+          
+          # Create package manifest with release version
+          cat > package-manifest.json << EOF
+          {
+            "name": "ca-certificate-import-action",
+            "version": "${{ steps.version.outputs.full_without_prefix }}",
+            "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "git_sha": "${{ github.sha }}",
+            "git_ref": "${{ github.ref_name }}",
+            "platform": "${{ runner.os }}",
+            "is_prerelease": ${{ steps.version.outputs.is_stable != 'true' }}
+          }
+          EOF
+          
+          echo "📦 Package manifest created:"
+          cat package-manifest.json
+
+      - name: Generate release notes
+        id: release_notes
+        uses: mikepenz/release-changelog-builder-action@v6
+        with:
+          configurationJson: |
+            {
+              "template": "#{{CHANGELOG}}\n\n<details>\n<summary>Pull Requests</summary>\n\n#{{PR_LIST}}\n</details>\n\n---\n\n### Usage\n\n\\`\\`\\`yaml\n- uses: LiquidLogicLabs/ca-certificate-import-action@${{ github.ref_name }}\n  with:\n    certificate-source: 'path/to/cert.crt'\n\\`\\`\\`\n\n### Installation\n\nThe certificate will be installed to the system CA store and trusted by:\n- ✅ Docker (push/pull from registries with custom certs)\n- ✅ curl, wget, and other HTTP clients\n- ✅ pip, npm, apt, and other package managers\n- ✅ Git operations over HTTPS\n- ✅ Any tool that uses the system CA store"
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          name: Release ${{ steps.version.outputs.full_without_prefix }}
+          body: ${{ steps.release_notes.outputs.changelog }}
+          draft: false
+          prerelease: ${{ steps.version.outputs.is_stable != 'true' }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release Summary
+        run: |
+          echo "## 🎉 Release Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ steps.version.outputs.full_without_prefix }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **GitHub Release**: [View Release](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.version.outputs.is_stable }}" != "true" ]; then
+            echo "- **Status**: ⚠️ Pre-release (for testing)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status**: ✅ Stable release" >> $GITHUB_STEP_SUMMARY
+          fi
+
