@@ -36,6 +36,7 @@ action-name/
 ├── src/                    # TypeScript source code
 │   ├── index.ts           # Main entry point
 │   ├── types.ts           # TypeScript type definitions
+│   ├── logger.ts          # Logger utility class (REQUIRED)
 │   └── [module].ts        # Modular code organization
 ├── dist/                   # Built output (COMMITTED to git)
 │   └── index.js           # Bundled action code
@@ -246,7 +247,7 @@ run();
 - **Modular design**: Split functionality into separate modules/files
 - **Type safety**: Define types in `types.ts` or per-module
 - **Error handling**: Always wrap in try/catch, use `core.setFailed()`
-- **Logging**: Use `core.info()`, `core.warning()`, `core.error()` appropriately
+- **Logging**: Use the standardized `Logger` class (see "Logging" section below)
 - **Secret masking**: Use `core.setSecret()` for sensitive values
 - **Input validation**: Validate inputs early and provide clear error messages
 
@@ -489,11 +490,12 @@ jobs:
         with:
           fetch-depth: 0  # Full history for changelog generation
 
-      - name: Check version format in tag
+      - name: Parse and validate version tag
         id: version
-        uses: nowsprinting/check-version-format-action@v4
+        uses: LiquidLogicLabs/git-tag-validate-version-action@v1
         with:
-          prefix: 'v'
+          tag: ${{ github.event.inputs.tag || github.ref_name }}
+          versionType: 'auto'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -520,29 +522,30 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create/Update Major, Minor, and Latest Version Tags
-        if: steps.version.outputs.is_stable == 'true'
-        uses: simbo/action-semver-release-action@latest
+        if: steps.version.outputs.hasPrerelease != 'true' && steps.version.outputs.isValid == 'true'
+        uses: LiquidLogicLabs/git-floating-version-tags-action@v1
         with:
-          create-release: false  # We handle release creation separately with changelog
-          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.event.inputs.tag || github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.ref_name }}
-          name: Release ${{ steps.version.outputs.full_without_prefix }}
+          name: Release ${{ steps.version.outputs.version }}
           body: ${{ steps.release_notes.outputs.changelog }}
           draft: false
-          prerelease: ${{ steps.version.outputs.is_stable != 'true' }}
+          prerelease: ${{ steps.version.outputs.hasPrerelease == 'true' }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Release Summary
         run: |
           echo "## 🎉 Release Complete!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ steps.version.outputs.full_without_prefix }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **GitHub Release**: [View Release](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.version.outputs.is_stable }}" != "true" ]; then
+          if [ "${{ steps.version.outputs.hasPrerelease }}" != "true" ]; then
             echo "- **Status**: ⚠️ Pre-release (for testing)" >> $GITHUB_STEP_SUMMARY
           else
             echo "- **Status**: ✅ Stable release" >> $GITHUB_STEP_SUMMARY
@@ -577,11 +580,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check version format in tag
+      - name: Parse and validate version tag
         id: version
-        uses: nowsprinting/check-version-format-action@v4
+        uses: LiquidLogicLabs/git-tag-validate-version-action@v1
         with:
-          prefix: 'v'
+          tag: ${{ github.event.inputs.tag || github.ref_name }}
+          versionType: 'auto'
 
       - name: Build validation
         run: |
@@ -606,12 +610,12 @@ jobs:
           cat > package-manifest.json << EOF
           {
             "name": "action-name",
-            "version": "${{ steps.version.outputs.full_without_prefix }}",
+            "version": "${{ steps.version.outputs.version }}",
             "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "git_sha": "${{ github.sha }}",
             "git_ref": "${{ github.ref_name }}",
             "platform": "${{ runner.os }}",
-            "is_prerelease": ${{ steps.version.outputs.is_stable != 'true' }}
+            "is_prerelease": ${{ steps.version.outputs.hasPrerelease == 'true' }}
           }
           EOF
 
@@ -628,29 +632,30 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create/Update Major, Minor, and Latest Version Tags
-        if: steps.version.outputs.is_stable == 'true'
-        uses: simbo/action-semver-release-action@latest
+        if: steps.version.outputs.hasPrerelease != 'true' && steps.version.outputs.isValid == 'true'
+        uses: LiquidLogicLabs/git-floating-version-tags-action@v1
         with:
-          create-release: false  # We handle release creation separately with changelog
-          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.event.inputs.tag || github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.ref_name }}
-          name: Release ${{ steps.version.outputs.full_without_prefix }}
+          name: Release ${{ steps.version.outputs.version }}
           body: ${{ steps.release_notes.outputs.changelog }}
           draft: false
-          prerelease: ${{ steps.version.outputs.is_stable != 'true' }}
+          prerelease: ${{ steps.version.outputs.hasPrerelease == 'true' }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Release Summary
         run: |
           echo "## 🎉 Release Complete!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ steps.version.outputs.full_without_prefix }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **GitHub Release**: [View Release](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.version.outputs.is_stable }}" != "true" ]; then
+          if [ "${{ steps.version.outputs.hasPrerelease }}" != "true" ]; then
             echo "- **Status**: ⚠️ Pre-release (for testing)" >> $GITHUB_STEP_SUMMARY
           else
             echo "- **Status**: ✅ Stable release" >> $GITHUB_STEP_SUMMARY
@@ -667,7 +672,7 @@ jobs:
 - **For composite actions**: Validate `action.yml` and shell script syntax before release
 - **Self-contained**: Release workflow should run all checks independently (lint + test), not depend on external CI workflows
 - **CI Workflow**: Should skip on tag pushes using `if: github.ref_type != 'tag'` to avoid duplicate runs (release workflow handles tag pushes)
-- **Floating Tags**: Use `simbo/action-semver-release-action@latest` to create/update major (`v1`), minor (`v1.2`), and `latest` tags for stable releases
+- **Floating Tags**: Use `LiquidLogicLabs/git-floating-version-tags-action@v1` to create/update major (`v1`), minor (`v1.2`), and `latest` tags for stable releases
 - **Version Pinning**: Users can pin to `@v1` (major), `@v1.2` (minor), `@latest` (latest stable), or `@v1.2.3` (exact version)
 - **Optional**: Include usage examples in release notes template for better user experience
 - **Optional**: Create package manifest for tracking build metadata
@@ -798,6 +803,248 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Use Jest with ts-jest
 - Place tests in `src/__tests__/` or alongside source files
 - Use `continue-on-error: true` in CI if tests are optional
+
+## Logging
+
+### Standardized Logger Pattern
+
+**All Node.js actions MUST use a standardized `Logger` class** located in `src/logger.ts`. This ensures consistent logging behavior across all actions.
+
+#### Logger Class Structure
+
+Create `src/logger.ts` with the following pattern:
+
+```typescript
+import * as core from '@actions/core';
+
+/**
+ * Logger utility with verbose/debug support
+ * Provides consistent logging across the action
+ */
+export class Logger {
+  public readonly verbose: boolean;
+
+  constructor(verbose: boolean = false) {
+    this.verbose = verbose;
+  }
+
+  /**
+   * Log an info message
+   */
+  info(message: string): void {
+    core.info(message);
+  }
+
+  /**
+   * Log a warning message
+   */
+  warning(message: string): void {
+    core.warning(message);
+  }
+
+  /**
+   * Log an error message
+   */
+  error(message: string): void {
+    core.error(message);
+  }
+
+  /**
+   * Log a debug message - uses core.info() when verbose is true so it always shows
+   * Falls back to core.debug() when verbose is false (for when ACTIONS_STEP_DEBUG is set at workflow level)
+   */
+  debug(message: string): void {
+    if (this.verbose) {
+      core.info(`[DEBUG] ${message}`);
+    } else {
+      core.debug(message);
+    }
+  }
+}
+```
+
+#### Usage in Actions
+
+**In `action.yml`, add a `verbose` input:**
+
+```yaml
+inputs:
+  verbose:
+    description: 'Enable verbose debug logging'
+    required: false
+    default: 'false'
+```
+
+**In `src/index.ts`:**
+
+```typescript
+import * as core from '@actions/core';
+import { Logger } from './logger';
+
+async function run(): Promise<void> {
+  try {
+    const verbose = core.getBooleanInput('verbose');
+    
+    // Create logger instance
+    const logger = new Logger(verbose);
+    
+    // Use logger throughout the action
+    logger.debug('Debug message');
+    logger.info('Info message');
+    logger.warning('Warning message');
+    logger.error('Error message');
+    
+    // Pass logger to other modules
+    const result = await someFunction(logger);
+    
+  } catch (error) {
+    if (error instanceof Error) {
+      core.setFailed(error.message);
+    }
+  }
+}
+```
+
+**Pass logger to module functions:**
+
+```typescript
+// src/module.ts
+import { Logger } from './logger';
+
+export async function someFunction(logger: Logger): Promise<string> {
+  logger.debug('Starting operation');
+  // ... operation code ...
+  logger.debug('Operation complete');
+  return result;
+}
+```
+
+#### Key Benefits
+
+1. **Consistent Verbose Output**: When `verbose: true`, debug messages always show via `core.info('[DEBUG] ...')`, regardless of `ACTIONS_STEP_DEBUG` workflow setting
+2. **Workflow-Level Debug**: When `verbose: false`, debug messages still show if `ACTIONS_STEP_DEBUG` is set at the workflow level via `core.debug()`
+3. **Centralized Pattern**: All actions use the same logging pattern, making it easier to maintain and understand
+4. **Type Safety**: Logger is strongly typed and can be passed between modules
+5. **Testability**: Logger can be easily mocked in tests
+
+#### Important Notes
+
+- **Always use `verbose` as the input name** (not `debug`) for consistency
+- **Make `verbose` property `public readonly`** so it can be accessed when needed (e.g., for conditional formatting)
+- **Do NOT create inline `debugLog` helpers** - always use the Logger class
+- **Pass Logger instance to module functions** instead of passing `verbose: boolean`
+- **For backward compatibility**: If updating existing actions, you can keep a deprecated `createLogger()` function that returns a legacy logger interface
+
+#### Example: Updating Existing Actions
+
+If an action currently uses inline `debugLog` helpers:
+
+```typescript
+// OLD - Don't do this
+const debugLog = (message: string) => {
+  if (verbose) {
+    core.info(`[DEBUG] ${message}`);
+  } else {
+    core.debug(message);
+  }
+};
+```
+
+Replace with Logger class:
+
+```typescript
+// NEW - Use Logger class
+import { Logger } from './logger';
+const logger = new Logger(verbose);
+logger.debug(message);
+```
+
+#### Testing the Logger
+
+**All actions should include unit tests for the Logger class** located in `src/__tests__/logger.test.ts`. This ensures the logging behavior works correctly.
+
+**Example test file:**
+
+```typescript
+import { Logger } from '../logger';
+import * as core from '@actions/core';
+
+// Mock @actions/core
+jest.mock('@actions/core', () => ({
+  info: jest.fn(),
+  warning: jest.fn(),
+  error: jest.fn(),
+  debug: jest.fn(),
+}));
+
+describe('Logger', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('with verbose disabled', () => {
+    const logger = new Logger(false);
+
+    it('should log info messages', () => {
+      logger.info('Test message');
+      expect(core.info).toHaveBeenCalledWith('Test message');
+    });
+
+    it('should log warning messages', () => {
+      logger.warning('Warning message');
+      expect(core.warning).toHaveBeenCalledWith('Warning message');
+    });
+
+    it('should log error messages', () => {
+      logger.error('Error message');
+      expect(core.error).toHaveBeenCalledWith('Error message');
+    });
+
+    it('should log debug messages using core.debug() when verbose is false', () => {
+      logger.debug('Debug message');
+      expect(core.debug).toHaveBeenCalledWith('Debug message');
+      expect(core.info).not.toHaveBeenCalled();
+    });
+
+    it('should expose verbose property', () => {
+      expect(logger.verbose).toBe(false);
+    });
+  });
+
+  describe('with verbose enabled', () => {
+    const logger = new Logger(true);
+
+    it('should log debug messages using core.info() with [DEBUG] prefix when verbose is true', () => {
+      logger.debug('Debug message');
+      expect(core.info).toHaveBeenCalledWith('[DEBUG] Debug message');
+      expect(core.debug).not.toHaveBeenCalled();
+    });
+
+    it('should expose verbose property', () => {
+      expect(logger.verbose).toBe(true);
+    });
+  });
+
+  describe('default constructor', () => {
+    it('should default to verbose=false', () => {
+      const logger = new Logger();
+      expect(logger.verbose).toBe(false);
+      logger.debug('Test');
+      expect(core.debug).toHaveBeenCalledWith('Test');
+      expect(core.info).not.toHaveBeenCalled();
+    });
+  });
+});
+```
+
+**Key test requirements:**
+
+1. **Test both verbose modes**: Verify behavior when `verbose: true` and `verbose: false`
+2. **Verify core.debug() is called**: When `verbose: false`, `debug()` should call `core.debug()`, not `core.info()`
+3. **Verify core.info() is called with [DEBUG] prefix**: When `verbose: true`, `debug()` should call `core.info('[DEBUG] ...')`
+4. **Test all log methods**: `info()`, `warning()`, `error()`, and `debug()` should be tested
+5. **Test verbose property**: Verify that `verbose` property is correctly exposed and accessible
+6. **Test default constructor**: Verify that default constructor sets `verbose: false`
 
 ## Dev Container Configuration
 
