@@ -4,6 +4,14 @@ on:
   workflow_call:  # Called by CI workflow
   workflow_dispatch:  # Allow manual triggering
 
+
+concurrency:
+  # NOTE: For workflow_call, GitHub can detect a concurrency deadlock if the callee
+  # shares the same group as the caller. Use an explicit prefix here to ensure
+  # this workflow never collides with the top-level CI workflow group.
+  group: Test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
