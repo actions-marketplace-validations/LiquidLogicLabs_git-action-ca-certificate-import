@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
 # Color codes for output
 RED='\033[0;31m'
@@ -144,7 +144,9 @@ case "$CERT_TYPE" in
     "inline")
         log_info "Auto-detected: Inline certificate content"
         log_debug "Certificate content length: ${#INPUT_CERTIFICATE} characters"
-        echo "$INPUT_CERTIFICATE" > "$TEMP_CERT"
+        # printf %s preserves backslashes and leading dashes (e.g. -----BEGIN)
+        # that `echo` with some shells/flags can mangle.
+        printf '%s\n' "$INPUT_CERTIFICATE" > "$TEMP_CERT"
         ;;
         
     "file")
