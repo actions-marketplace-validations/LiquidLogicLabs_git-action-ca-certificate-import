@@ -1,3 +1,7 @@
+## [3.0.2](https://github.com/LiquidLogicLabs/git-action-ca-certificate-import/compare/v3.0.1...v3.0.2) (2026-04-21)
+
+
+
 # Changelog
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
