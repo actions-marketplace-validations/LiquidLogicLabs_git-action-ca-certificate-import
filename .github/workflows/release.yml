@@ -13,7 +13,8 @@ on:
 
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.inputs.tag || github.ref }}
+  # Same group for same release whether triggered by push (tag) or workflow_dispatch (inputs.tag)
+  group: ${{ github.workflow || 'Release' }}-${{ github.event.inputs.tag || github.ref_name || github.ref || github.run_id }}
   cancel-in-progress: false
 
 permissions:
@@ -32,17 +33,17 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0  # Full history for changelog generation
           ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Parse and validate version tag
         id: version
-        uses: LiquidLogicLabs/git-tag-validate-version-action@v1
+        uses: LiquidLogicLabs/git-tag-validate-version-action@v2
         with:
           tag: ${{ github.event.inputs.tag || github.ref_name }}
-          versionType: 'auto'
+          version-type: 'auto'
 
       - name: Build validation
         run: |
@@ -78,12 +79,21 @@ jobs:
             "git_sha": "${{ github.sha }}",
             "git_ref": "${{ github.event.inputs.tag || github.ref_name }}",
             "platform": "${{ runner.os }}",
-            "is_prerelease": ${{ steps.version.outputs.hasPrerelease == 'true' }}
+            "is_prerelease": ${{ steps.version.outputs.has-prerelease == 'true' }}
           }
           EOF
           
           echo "📦 Package manifest created:"
           cat package-manifest.json
+
+      - name: Verify tracked scripts are unchanged
+        run: |
+          if ! git diff --quiet -- action.yml install-certificate.sh; then
+            echo "::error::action.yml or install-certificate.sh changed during validation."
+            git diff --stat -- action.yml install-certificate.sh
+            exit 1
+          fi
+          echo "Tracked scripts verified."
 
       - name: Generate release notes
         id: release_notes
@@ -98,21 +108,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create/Update Major, Minor, and Latest Version Tags
-        if: steps.version.outputs.hasPrerelease != 'true' && steps.version.outputs.isValid == 'true'
-        uses: LiquidLogicLabs/git-floating-version-tags-action@v1
+        if: steps.version.outputs.has-prerelease != 'true' && steps.version.outputs.is-valid == 'true'
+        uses: LiquidLogicLabs/git-floating-version-tags-action@v2
         with:
           tag: ${{ github.event.inputs.tag || github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
-        uses: LiquidLogicLabs/git-action-release@v1
+        uses: LiquidLogicLabs/git-action-release@v2
         with:
           tag: ${{ github.event.inputs.tag || github.ref_name }}
           name: Release ${{ steps.version.outputs.version }}
           body: ${{ steps.release_notes.outputs.changelog }}
           draft: false
-          prerelease: ${{ steps.version.outputs.hasPrerelease == 'true' }}
+          prerelease: ${{ steps.version.outputs.has-prerelease == 'true' }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Release Summary
@@ -121,7 +131,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **GitHub Release**: [View Release](https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.tag || github.ref_name }})" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.version.outputs.hasPrerelease }}" == "true" ]; then
+          if [ "${{ steps.version.outputs.has-prerelease }}" == "true" ]; then
             echo "- **Status**: ⚠️ Pre-release (for testing)" >> $GITHUB_STEP_SUMMARY
           else
             echo "- **Status**: ✅ Stable release" >> $GITHUB_STEP_SUMMARY

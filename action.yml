@@ -35,6 +35,11 @@ inputs:
     required: false
     default: ''
 
+  skip-certificate-check:
+    description: 'Skip TLS certificate verification when downloading certificates from URLs'
+    required: false
+    default: 'false'
+
 outputs:
   certificate-path:
     description: 'Path where the certificate was installed'
@@ -61,4 +66,5 @@ runs:
         INPUT_VERBOSE: ${{ inputs.verbose == 'true' || env.ACTIONS_STEP_DEBUG == 'true' }}
         INPUT_GENERATE_BUILDKIT: ${{ inputs.generate-buildkit }}
         INPUT_BUILDKIT_RUNTIME: ${{ inputs.buildkit-runtime }}
+        INPUT_SKIP_CERTIFICATE_CHECK: ${{ inputs.skip-certificate-check }}
 

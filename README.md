@@ -75,6 +75,7 @@ The action **auto-detects** the certificate source type (file path, URL, or inli
 | `verbose` | Enable verbose debug logging | No | `false` |
 | `generate-buildkit` | Generate buildkit.toml configuration file | No | `false` |
 | `buildkit-runtime` | Container runtime for BuildKit (e.g., 'io.containerd.runc.v2'). Leave empty to omit runtime configuration | No | - |
+| `skip-certificate-check` | Skip TLS certificate verification when downloading certificates from URLs | No | `false` |
 
 ## Outputs
 
@@ -83,6 +84,10 @@ The action **auto-detects** the certificate source type (file path, URL, or inli
 | `certificate-path` | Path where certificate was installed |
 | `certificate-name` | Name of the installed certificate file |
 | `buildkit-path` | Path to the generated buildkit.toml file (only set if generate-buildkit is true) |
+
+## Permissions
+
+No special permissions are required. Typical workflows need `contents: read` for checkout.
 
 ## How It Works
 

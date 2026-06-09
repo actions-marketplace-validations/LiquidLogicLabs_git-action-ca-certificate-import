@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
 # Color codes for output
 RED='\033[0;31m'
@@ -55,6 +55,7 @@ if [ "$INPUT_VERBOSE" = "true" ]; then
     log_debug "  INPUT_CERTIFICATE_NAME: ${INPUT_CERTIFICATE_NAME:-<not set>}"
     log_debug "  INPUT_VERBOSE: ${INPUT_VERBOSE}"
     log_debug "  INPUT_GENERATE_BUILDKIT: ${INPUT_GENERATE_BUILDKIT:-<not set>}"
+    log_debug "  INPUT_SKIP_CERTIFICATE_CHECK: ${INPUT_SKIP_CERTIFICATE_CHECK:-<not set>}"
     log_debug "  Working Directory: $(pwd)"
     log_debug "  User: $(whoami 2>/dev/null || echo '<unknown>')"
     log_debug "  Runner OS: ${RUNNER_OS:-<not set>}"
@@ -123,8 +124,13 @@ case "$CERT_TYPE" in
         log_info "Auto-detected: URL source"
         log_info "Downloading certificate from: $INPUT_CERTIFICATE"
         log_debug "Using curl to download certificate..."
+        CURL_FLAGS="-fsSL"
+        if [ "$INPUT_SKIP_CERTIFICATE_CHECK" = "true" ]; then
+            log_warn "TLS certificate verification is disabled. This is a security risk and should only be used with trusted endpoints."
+            CURL_FLAGS="$CURL_FLAGS -k"
+        fi
         
-        if ! curl -fsSL -o "$TEMP_CERT" "$INPUT_CERTIFICATE"; then
+        if ! curl $CURL_FLAGS -o "$TEMP_CERT" "$INPUT_CERTIFICATE"; then
             log_error "Failed to download certificate from URL: $INPUT_CERTIFICATE"
             log_error "Please verify the URL is accessible and correct"
             rm -rf "$TEMP_DIR"
@@ -138,7 +144,9 @@ case "$CERT_TYPE" in
     "inline")
         log_info "Auto-detected: Inline certificate content"
         log_debug "Certificate content length: ${#INPUT_CERTIFICATE} characters"
-        echo "$INPUT_CERTIFICATE" > "$TEMP_CERT"
+        # printf %s preserves backslashes and leading dashes (e.g. -----BEGIN)
+        # that `echo` with some shells/flags can mangle.
+        printf '%s\n' "$INPUT_CERTIFICATE" > "$TEMP_CERT"
         ;;
         
     "file")
